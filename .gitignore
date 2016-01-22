@@ -64,7 +64,21 @@ target/
 build
 tornado.egg-info
 
+
+*.pyo
+*.class
+/dist/
+MANIFEST
+/tornado.egg-info/
+.vagrant
+/.coverage
+/htmlcov/
+/env/
+# Used in demo apps
+secrets.cfg
+
 # add 2016
 .idea/
 .DS_Store
 
+src/tornado-4.2.0/docs/
