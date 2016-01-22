@@ -1,29 +1,14 @@
 #!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
-
-
-#------------------------------------------------------------
-# 模块说明: 核心模块
-
-
-#------------------------------------------------------------
-
+# -*- coding: utf8 -*-
 
 
 """The Tornado web framework.
+    核心模块, 参考示例使用代码:
+    - 重要模块:
+        - tornado.web
+        - tornado.ioloop      # 根据示例,可知入口在此.参看: ioloop.py
+        - tornado.httpserver
+
 
 The Tornado web framework looks a bit like web.py (http://webpy.org/) or
 Google's webapp (http://code.google.com/appengine/docs/python/tools/webapp/),
@@ -959,6 +944,18 @@ class Application(object):
     """
     def __init__(self, handlers=None, default_host="", transforms=None,
                  wsgi=False, **settings):
+        """
+
+        :param handlers:
+        :param default_host:
+        :param transforms:
+        :param wsgi:
+        :param settings:
+                    - gzip        : 压缩
+                    - static_path : 静态资源路径
+                    - debug       : 调试开关
+        :return:
+        """
         if transforms is None:
             self.transforms = []
             if settings.get("gzip"):
@@ -966,16 +963,18 @@ class Application(object):
             self.transforms.append(ChunkedTransferEncoding)
         else:
             self.transforms = transforms
+
         self.handlers = []
         self.named_handlers = {}
         self.default_host = default_host
-        self.settings = settings
+        self.settings = settings            # 自定义配置项
         self.ui_modules = {}
         self.ui_methods = {}
         self._wsgi = wsgi
         self._load_ui_modules(settings.get("ui_modules", {}))
         self._load_ui_methods(settings.get("ui_methods", {}))
-        if self.settings.get("static_path"):
+
+        if self.settings.get("static_path"):        # 配置项中含: 静态资源路径
             path = self.settings["static_path"]
             handlers = list(handlers or [])
             static_url_prefix = settings.get("static_url_prefix",
@@ -986,11 +985,12 @@ class Application(object):
                 (r"/(favicon\.ico)", StaticFileHandler, dict(path=path)),
                 (r"/(robots\.txt)", StaticFileHandler, dict(path=path)),
             ] + handlers
-        if handlers: self.add_handlers(".*$", handlers)
+        if handlers:
+            self.add_handlers(".*$", handlers)
 
         # Automatically reload modified modules
-        if self.settings.get("debug") and not wsgi:
-            import autoreload
+        if self.settings.get("debug") and not wsgi:    # 调试模式时, 自动监测,并重启项目
+            import autoreload    # tornado 自定义模块
             autoreload.start()
 
     def add_handlers(self, host_pattern, host_handlers):
