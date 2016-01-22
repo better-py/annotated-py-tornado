@@ -1,20 +1,11 @@
 #!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
+# -*- coding: utf8 -*-
 
-"""A level-triggered I/O loop for non-blocking sockets."""
+
+"""A level-triggered I/O loop for non-blocking sockets.
+   轻量级 I/O 循环, 非阻塞socket
+   核心模块: 重点阅读
+"""
 
 import bisect
 import errno
@@ -32,17 +23,19 @@ except ImportError:
 try:
     import fcntl
 except ImportError:
-    if os.name == 'nt':
+    if os.name == 'nt':       # Windows 内核
         import win32_support
         import win32_support as fcntl
     else:
         raise
 
+
+
 class IOLoop(object):
     """A level-triggered I/O loop.
 
-    We use epoll if it is available, or else we fall back on select(). If
-    you are implementing a system that needs to handle 1000s of simultaneous
+    We use epoll if it is available, or else we fall back on select().
+    If you are implementing a system that needs to handle 1000s of simultaneous
     connections, you should use Linux and either compile our epoll module or
     use Python 2.6+ to get epoll support.
 
@@ -106,12 +99,13 @@ class IOLoop(object):
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
-        if os.name != 'nt':
+        if os.name != 'nt':     # 非 Windows 内核
             r, w = os.pipe()
             self._set_nonblocking(r)
             self._set_nonblocking(w)
             self._set_close_exec(r)
             self._set_close_exec(w)
+
             self._waker_reader = os.fdopen(r, "r", 0)
             self._waker_writer = os.fdopen(w, "w", 0)
         else:
@@ -120,7 +114,7 @@ class IOLoop(object):
         self.add_handler(r, self._read_waker, self.READ)
 
     @classmethod
-    def instance(cls):
+    def instance(cls):    # 全局单实例, 每个项目,必用
         """Returns a global IOLoop instance.
 
         Most single-threaded applications have a single, global IOLoop.
@@ -135,13 +129,13 @@ class IOLoop(object):
                 def __init__(self, io_loop=None):
                     self.io_loop = io_loop or IOLoop.instance()
         """
-        if not hasattr(cls, "_instance"):
+        if not hasattr(cls, "_instance"):     # 不存在 全局实例, 创建,并返回之
             cls._instance = cls()
         return cls._instance
 
     @classmethod
     def initialized(cls):
-        return hasattr(cls, "_instance")
+        return hasattr(cls, "_instance")     # 初始化状态,判断
 
     def add_handler(self, fd, handler, events):
         """Registers the given handler to receive the given events for fd."""
@@ -175,9 +169,13 @@ class IOLoop(object):
 
     def _handle_alarm(self, signal, frame):
         logging.warning('IOLoop blocked for %f seconds in\n%s',
-                     self._blocking_log_threshold,
-                     ''.join(traceback.format_stack(frame)))
+                        self._blocking_log_threshold,
+                        ''.join(traceback.format_stack(frame)))
 
+    # ----------------------------------------
+    # 对外接口:
+    #       - 内部是一个 大的 while 死循环
+    # ----------------------------------------
     def start(self):
         """Starts the I/O loop.
 
@@ -188,6 +186,8 @@ class IOLoop(object):
             self._stopped = False
             return
         self._running = True
+
+        # 处理死循环
         while True:
             # Never use an infinite timeout here - it can stall epoll
             poll_timeout = 0.2
@@ -468,7 +468,9 @@ class _KQueue(object):
 
 
 class _Select(object):
-    """A simple, select()-based IOLoop implementation for non-Linux systems"""
+    """A simple, select()-based IOLoop implementation for non-Linux systems
+       非 Linux内核 处理
+    """
     def __init__(self):
         self.read_fds = set()
         self.write_fds = set()
@@ -476,9 +478,12 @@ class _Select(object):
         self.fd_sets = (self.read_fds, self.write_fds, self.error_fds)
 
     def register(self, fd, events):
-        if events & IOLoop.READ: self.read_fds.add(fd)
-        if events & IOLoop.WRITE: self.write_fds.add(fd)
-        if events & IOLoop.ERROR: self.error_fds.add(fd)
+        if events & IOLoop.READ:
+            self.read_fds.add(fd)
+        if events & IOLoop.WRITE:
+            self.write_fds.add(fd)
+        if events & IOLoop.ERROR:
+            self.error_fds.add(fd)
 
     def modify(self, fd, events):
         self.unregister(fd)
