@@ -1,18 +1,6 @@
 #!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
+# -*- coding: utf8 -*-
+
 
 """``tornado.web`` provides a simple web framework with asynchronous
 features that allow it to scale to large numbers of open connections,
@@ -1733,6 +1721,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         self.named_handlers = {}
         self.default_host = default_host
         self.settings = settings
+
         self.ui_modules = {'linkify': _linkify,
                            'xsrf_form_html': _xsrf_form_html,
                            'Template': TemplateModule,
@@ -1740,6 +1729,7 @@ class Application(httputil.HTTPServerConnectionDelegate):
         self.ui_methods = {}
         self._load_ui_modules(settings.get("ui_modules", {}))
         self._load_ui_methods(settings.get("ui_methods", {}))
+
         if self.settings.get("static_path"):
             path = self.settings["static_path"]
             handlers = list(handlers or [])
