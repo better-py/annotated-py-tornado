@@ -903,6 +903,12 @@ def addslash(method):
     return wrapper
 
 
+# ----------------------------------------------------------------
+# 入口:
+#
+#
+# ----------------------------------------------------------------
+
 class Application(object):
     """A collection of request handlers that make up a web application.
 
