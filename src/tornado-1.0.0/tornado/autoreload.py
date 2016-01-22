@@ -1,23 +1,15 @@
 #!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
+# -*- coding: utf8 -*-
+
 
 """A module to automatically restart the server when a module is modified.
 
 This module depends on IOLoop, so it will not work in WSGI applications
 and Google AppEngine.
+
+    当 debug 开关打开时, 调用此模块,实现自动检查代码变化,并重启项目.
+    在 web.py/Application().__init()__ 中调用
+
 """
 
 import functools
@@ -32,20 +24,23 @@ try:
 except ImportError:
     signal = None
 
+
+# 本模块,对外API接口:
 def start(io_loop=None, check_time=500):
     """Restarts the process automatically when a module is modified.
 
     We run on the I/O loop, and restarting is a destructive operation,
     so will terminate any pending requests.
     """
-    io_loop = io_loop or ioloop.IOLoop.instance()
+    io_loop = io_loop or ioloop.IOLoop.instance()     # 注意默认参数
     modify_times = {}
     callback = functools.partial(_reload_on_update, io_loop, modify_times)
     scheduler = ioloop.PeriodicCallback(callback, check_time, io_loop=io_loop)
     scheduler.start()
 
 
-_reload_attempted = False
+_reload_attempted = False    # 开关,当尝试重启失败,就更改开关值
+
 
 def _reload_on_update(io_loop, modify_times):
     global _reload_attempted
@@ -57,21 +52,28 @@ def _reload_on_update(io_loop, modify_times):
         # in the standard library), and occasionally this can cause strange
         # failures in getattr.  Just ignore anything that's not an ordinary
         # module.
-        if not isinstance(module, types.ModuleType): continue
+        if not isinstance(module, types.ModuleType):
+            continue
+
         path = getattr(module, "__file__", None)
-        if not path: continue
+        if not path:
+            continue
+
         if path.endswith(".pyc") or path.endswith(".pyo"):
             path = path[:-1]
         try:
             modified = os.stat(path).st_mtime
         except:
             continue
+
         if path not in modify_times:
             modify_times[path] = modified
             continue
+
         if modify_times[path] != modified:
             logging.info("%s modified; restarting server", path)
-            _reload_attempted = True
+            _reload_attempted = True   # 更改全局变量值
+
             for fd in io_loop._handlers.keys():
                 try:
                     os.close(fd)
