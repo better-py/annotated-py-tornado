@@ -14,10 +14,20 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+
+#------------------------------------------------------------
+# 模块说明: 核心模块
+
+
+#------------------------------------------------------------
+
+
+
 """The Tornado web framework.
 
 The Tornado web framework looks a bit like web.py (http://webpy.org/) or
 Google's webapp (http://code.google.com/appengine/docs/python/tools/webapp/),
+
 but with additional tools and optimizations to take advantage of the
 Tornado non-blocking web server and tools.
 
@@ -70,12 +80,25 @@ import urllib
 import urlparse
 import uuid
 
+
+
+#------------------------------------------------------------
+# 模块说明: 核心模块
+
+
+#------------------------------------------------------------
+
+
 class RequestHandler(object):
     """Subclass this class and define get() or post() to make a handler.
 
     If you want to support more methods than the standard GET/HEAD/POST, you
     should override the class variable SUPPORTED_METHODS in your
     RequestHandler class.
+
+    译:
+        1. 继承此类,并自定义get(), post()方法,创建 handler
+        2. 若需要支持更多方法(GET/HEAD/POST), 需要 在 子类中 覆写 类变量 SUPPORTED_METHODS
     """
     SUPPORTED_METHODS = ("GET", "HEAD", "POST", "DELETE", "PUT")
 
