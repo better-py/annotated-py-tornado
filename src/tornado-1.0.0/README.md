@@ -1,3 +1,36 @@
+
+
+
+## 1.0.0 注解备忘:
+
+
+- 此版本的代码,是python2.x的, 当在pycharm中阅读时,项目环境不要设置成python3.
+- 为方便阅读, 删除了 批注源码文件 的 LICENSE 说明, 请注意尊重版权.
+- 项目原有模块,函数的英文注释,根据需要,会作中文翻译.
+- 本版本 tornado 主体框架 Python 代码行数: `6023` (含注释)
+    - 代码量,比想象中的少,很精简,很有必要花时间精读一下
+    - 剔除 Demo 示例代码
+    - 本版本 单元测试代码,忽略不计
+- 统计代码行数命令: find . -name "*.py" | xargs grep -v "^$" | wc -l
+
+
+- 阅读入口:
+    - tornado/web.py
+
+
+
+
+
+
+
+
+
+---
+
+
+
+# 原项目 Readme 说明:
+
 Tornado
 =======
 Tornado is an open source version of the scalable, non-blocking web server
