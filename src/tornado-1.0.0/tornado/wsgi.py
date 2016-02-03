@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf8 -*-
 #
 # Copyright 2009 Facebook
 #
@@ -72,14 +73,20 @@ class WSGIApplication(web.Application):
                                  wsgi=True, **settings)
 
     def __call__(self, environ, start_response):
-        handler = web.Application.__call__(self, HTTPRequest(environ))
-        assert handler._finished
+
+        handler = web.Application.__call__(self, HTTPRequest(environ))    # 特别注意<关键代码>调用时机:
+
+        assert handler._finished    # 注意
+
         status = str(handler._status_code) + " " + \
             httplib.responses[handler._status_code]
+
         headers = handler._headers.items()
+
         for cookie_dict in getattr(handler, "_new_cookies", []):
             for cookie in cookie_dict.values():
                 headers.append(("Set-Cookie", cookie.OutputString(None)))
+
         start_response(status, headers)
         return handler._write_buffer
 

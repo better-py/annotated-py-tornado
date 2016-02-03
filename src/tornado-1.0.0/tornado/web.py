@@ -65,13 +65,30 @@ import urllib
 import urlparse
 import uuid
 
-
-
-#------------------------------------------------------------
+"""
 # 模块说明: 核心模块
 
+RequestHandler() 需要处理哪些工作:
 
-#------------------------------------------------------------
+    - 1. HTTP方法支持(GET,POST, HEAD, DELETE, PUT), 预定义各种接口
+    - 2. 预定义接口: 配对定义[类似 unittest 的 setUp(), tearDown() 方法]
+        - prepare()                # 运行前, 准备工作
+        - on_connection_close()    # 运行后, 清理工作
+        - 根据需要, 选择使用
+    - 3. cookies处理:
+        - set
+        - get
+        - clear
+    - 4. HTTP头处理:
+        - set_status()    # 状态码
+        - set_header()    # 头信息
+    - 5. 重定向:
+        - redirect()
+
+
+
+"""
+
 
 
 class RequestHandler(object):
@@ -102,12 +119,14 @@ class RequestHandler(object):
         # Check since connection is not available in WSGI
         if hasattr(self.request, "connection"):
             self.request.connection.stream.set_close_callback(
-                self.on_connection_close)
+                self.on_connection_close)    # 注意 self.on_connection_close() 调用时机
 
     @property
     def settings(self):
         return self.application.settings
 
+    # 如下这部分, 默认的接口定义, 如果子类没有覆写这些方法,就直接抛出异常.
+    # 也就是说: 这些接口, 必须要 覆写,才可以用
     def head(self, *args, **kwargs):
         raise HTTPError(405)
 
@@ -123,6 +142,8 @@ class RequestHandler(object):
     def put(self, *args, **kwargs):
         raise HTTPError(405)
 
+    # 预定义接口: 准备工作函数, 给需要 个性化配置用
+    # 注意调用时机: self._execute()
     def prepare(self):
         """Called before the actual handler method.
 
@@ -131,6 +152,8 @@ class RequestHandler(object):
         """
         pass
 
+    # 预定义接口2: 执行完后, 附带清理工作.(根据需要自行修改)
+    # 注意调用时机:  __init__()
     def on_connection_close(self):
         """Called in async handlers if the client closed the connection.
 
@@ -157,11 +180,14 @@ class RequestHandler(object):
         self._write_buffer = []
         self._status_code = 200
 
+    # 设置 HTTP状态码
     def set_status(self, status_code):
         """Sets the status code for our response."""
-        assert status_code in httplib.responses
+        assert status_code in httplib.responses    # 使用 assert 方式 作条件判断, 出错时,直接抛出
         self._status_code = status_code
 
+    # 设置 HTTP头信息
+    # 根据 value 类型, 作 格式转换处理
     def set_header(self, name, value):
         """Sets the given response header name and value.
 
@@ -179,7 +205,7 @@ class RequestHandler(object):
             # If \n is allowed into the header, it is possible to inject
             # additional headers or split the request. Also cap length to
             # prevent obviously erroneous values.
-            safe_value = re.sub(r"[\x00-\x1f]", " ", value)[:4000]
+            safe_value = re.sub(r"[\x00-\x1f]", " ", value)[:4000]    # 正则过滤 + 截取4000长度字符串
             if safe_value != value:
                 raise ValueError("Unsafe header value %r", value)
         self._headers[name] = value
@@ -222,18 +248,21 @@ class RequestHandler(object):
     @property
     def cookies(self):
         """A dictionary of Cookie.Morsel objects."""
+        # 如果不存在,定义cookies
+        # 如果存在, 返回之
         if not hasattr(self, "_cookies"):
-            self._cookies = Cookie.BaseCookie()
+            self._cookies = Cookie.BaseCookie()    # 定义
+
             if "Cookie" in self.request.headers:
                 try:
-                    self._cookies.load(self.request.headers["Cookie"])
+                    self._cookies.load(self.request.headers["Cookie"])    # 赋值
                 except:
-                    self.clear_all_cookies()
+                    self.clear_all_cookies()    # 异常时,调用 自定义清理函数
         return self._cookies
 
     def get_cookie(self, name, default=None):
         """Gets the value of the cookie with the given name, else default."""
-        if name in self.cookies:
+        if name in self.cookies:    # 注意, 因为 cookies() 被定义成 property, 可以直接这样调用
             return self.cookies[name].value
         return default
 
@@ -248,14 +277,17 @@ class RequestHandler(object):
         """
         name = _utf8(name)
         value = _utf8(value)
+
         if re.search(r"[\x00-\x20]", name + value):
             # Don't let us accidentally inject bad stuff
             raise ValueError("Invalid cookie %r: %r" % (name, value))
         if not hasattr(self, "_new_cookies"):
             self._new_cookies = []
+
         new_cookie = Cookie.BaseCookie()
         self._new_cookies.append(new_cookie)
         new_cookie[name] = value
+
         if domain:
             new_cookie[name]["domain"] = domain
         if expires_days is not None and not expires:
@@ -273,11 +305,16 @@ class RequestHandler(object):
     def clear_cookie(self, name, path="/", domain=None):
         """Deletes the cookie with the given name."""
         expires = datetime.datetime.utcnow() - datetime.timedelta(days=365)
+
+        # 赋空值, 清掉 cookie, 多个web框架,标准实现写法
         self.set_cookie(name, value="", path=path, expires=expires,
                         domain=domain)
 
     def clear_all_cookies(self):
         """Deletes all the cookies the user sent with this request."""
+        # 注: 注意如上2个相关函数 命名特征
+        #   - 单个操作: clear_cookie()
+        #   - 批量操作: clear_all_cookies()
         for name in self.cookies.iterkeys():
             self.clear_cookie(name)
 
@@ -290,10 +327,12 @@ class RequestHandler(object):
 
         To read a cookie set with this method, use get_secure_cookie().
         """
+        # 如下几步, 构造 "安全的cookie", 加 时间戳, 防伪造
         timestamp = str(int(time.time()))
         value = base64.b64encode(value)
-        signature = self._cookie_signature(name, value, timestamp)
+        signature = self._cookie_signature(name, value, timestamp)    # 加时间戳
         value = "|".join([value, timestamp, signature])
+
         self.set_cookie(name, value, expires_days=expires_days, **kwargs)
 
     def get_secure_cookie(self, name, include_name=True, value=None):
@@ -306,21 +345,30 @@ class RequestHandler(object):
         your users out whose cookies were written with a previous Tornado
         version).
         """
-        if value is None: value = self.get_cookie(name)
-        if not value: return None
+        if value is None:
+            value = self.get_cookie(name)
+        if not value:
+            return None
+
         parts = value.split("|")
-        if len(parts) != 3: return None
+        if len(parts) != 3:
+            return None
+
         if include_name:
             signature = self._cookie_signature(name, parts[0], parts[1])
         else:
             signature = self._cookie_signature(parts[0], parts[1])
+
         if not _time_independent_equals(parts[2], signature):
             logging.warning("Invalid cookie signature %r", value)
             return None
+
         timestamp = int(parts[1])
         if timestamp < time.time() - 31 * 86400:
             logging.warning("Expired cookie %r", value)
             return None
+
+        # 尝试返回
         try:
             return base64.b64decode(parts[0])
         except:
@@ -330,19 +378,31 @@ class RequestHandler(object):
         self.require_setting("cookie_secret", "secure cookies")
         hash = hmac.new(self.application.settings["cookie_secret"],
                         digestmod=hashlib.sha1)
-        for part in parts: hash.update(part)
+
+        for part in parts:
+            hash.update(part)
+
         return hash.hexdigest()
 
+    # 关键代码: 重定向
+    #
     def redirect(self, url, permanent=False):
         """Sends a redirect to the given (optionally relative) URL."""
         if self._headers_written:
             raise Exception("Cannot redirect after headers have been written")
+
         self.set_status(301 if permanent else 302)
+
         # Remove whitespace
         url = re.sub(r"[\x00-\x20]+", "", _utf8(url))
         self.set_header("Location", urlparse.urljoin(self.request.uri, url))
-        self.finish()
 
+        self.finish()    # 调用处理
+
+    # 关键代码: 准备 渲染页面的 数据, 常用接口函数
+    #   特别说明:
+    #       - 这里 write() 方法, 并没有直接 渲染页面, 而是在 准备 渲染数据
+    #       - 实际的 渲染HTML页面操作, 在 finish() 中
     def write(self, chunk):
         """Writes the given chunk to the output buffer.
 
@@ -356,8 +416,10 @@ class RequestHandler(object):
             chunk = escape.json_encode(chunk)
             self.set_header("Content-Type", "text/javascript; charset=UTF-8")
         chunk = _utf8(chunk)
-        self._write_buffer.append(chunk)
+        self._write_buffer.append(chunk)    # 准备 待渲染的 HTML数据
 
+    # 关键代码: 渲染页面
+    #
     def render(self, template_name, **kwargs):
         """Renders the template with the given arguments as the response."""
         html = self.render_string(template_name, **kwargs)
@@ -365,31 +427,44 @@ class RequestHandler(object):
         # Insert the additional JS and CSS added by the modules on the page
         js_embed = []
         js_files = []
+
         css_embed = []
         css_files = []
+
         html_heads = []
         html_bodies = []
+
         for module in getattr(self, "_active_modules", {}).itervalues():
+            # JS 部分
             embed_part = module.embedded_javascript()
-            if embed_part: js_embed.append(_utf8(embed_part))
+            if embed_part:
+                js_embed.append(_utf8(embed_part))
             file_part = module.javascript_files()
             if file_part:
                 if isinstance(file_part, basestring):
                     js_files.append(file_part)
                 else:
                     js_files.extend(file_part)
+
+            # CSS 部分
             embed_part = module.embedded_css()
-            if embed_part: css_embed.append(_utf8(embed_part))
+            if embed_part:
+                css_embed.append(_utf8(embed_part))
             file_part = module.css_files()
             if file_part:
                 if isinstance(file_part, basestring):
                     css_files.append(file_part)
                 else:
                     css_files.extend(file_part)
+
+            # Header 部分
             head_part = module.html_head()
-            if head_part: html_heads.append(_utf8(head_part))
+            if head_part:
+                html_heads.append(_utf8(head_part))
             body_part = module.html_body()
-            if body_part: html_bodies.append(_utf8(body_part))
+            if body_part:
+                html_bodies.append(_utf8(body_part))
+
         if js_files:
             # Maintain order of JavaScript files given by modules
             paths = []
@@ -400,16 +475,24 @@ class RequestHandler(object):
                 if path not in unique_paths:
                     paths.append(path)
                     unique_paths.add(path)
+
             js = ''.join('<script src="' + escape.xhtml_escape(p) +
                          '" type="text/javascript"></script>'
                          for p in paths)
+
             sloc = html.rindex('</body>')
             html = html[:sloc] + js + '\n' + html[sloc:]
+
+        # ----------------------------------------------------------
+        # 如下是 分块处理部分:
+        # ----------------------------------------------------------
+
         if js_embed:
             js = '<script type="text/javascript">\n//<![CDATA[\n' + \
                 '\n'.join(js_embed) + '\n//]]>\n</script>'
             sloc = html.rindex('</body>')
             html = html[:sloc] + js + '\n' + html[sloc:]
+
         if css_files:
             paths = set()
             for path in css_files:
@@ -422,18 +505,23 @@ class RequestHandler(object):
                           for p in paths)
             hloc = html.index('</head>')
             html = html[:hloc] + css + '\n' + html[hloc:]
+
         if css_embed:
             css = '<style type="text/css">\n' + '\n'.join(css_embed) + \
                 '\n</style>'
             hloc = html.index('</head>')
             html = html[:hloc] + css + '\n' + html[hloc:]
+
         if html_heads:
             hloc = html.index('</head>')
             html = html[:hloc] + ''.join(html_heads) + '\n' + html[hloc:]
+
         if html_bodies:
             hloc = html.index('</body>')
             html = html[:hloc] + ''.join(html_bodies) + '\n' + html[hloc:]
-        self.finish(html)
+
+        # 注意
+        self.finish(html)    # 关键调用
 
     def render_string(self, template_name, **kwargs):
         """Generate the given template with the given arguments.
@@ -496,26 +584,33 @@ class RequestHandler(object):
         if headers or chunk:
             self.request.write(headers + chunk)
 
+    # 超级关键代码: 写HTML页面
+    #
+    #
     def finish(self, chunk=None):
         """Finishes this response, ending the HTTP request."""
         assert not self._finished
-        if chunk is not None: self.write(chunk)
+        if chunk is not None:
+            self.write(chunk)    # 特别注意, 这里的关键调用
 
         # Automatically support ETags and add the Content-Length header if
         # we have not flushed any content yet.
         if not self._headers_written:
             if (self._status_code == 200 and self.request.method == "GET" and
-                "Etag" not in self._headers):
+                        "Etag" not in self._headers):
                 hasher = hashlib.sha1()
                 for part in self._write_buffer:
                     hasher.update(part)
+
                 etag = '"%s"' % hasher.hexdigest()
                 inm = self.request.headers.get("If-None-Match")
+
                 if inm and inm.find(etag) != -1:
                     self._write_buffer = []
                     self.set_status(304)
                 else:
                     self.set_header("Etag", etag)
+
             if "Content-Length" not in self._headers:
                 content_length = sum(len(part) for part in self._write_buffer)
                 self.set_header("Content-Length", content_length)
@@ -773,7 +868,9 @@ class RequestHandler(object):
             if self.request.method == "POST" and \
                self.application.settings.get("xsrf_cookies"):
                 self.check_xsrf_cookie()
-            self.prepare()
+
+            self.prepare()   # 注意调用时机
+
             if not self._finished:
                 getattr(self, self.request.method.lower())(*args, **kwargs)
                 if self._auto_finish and not self._finished:
@@ -1075,6 +1172,11 @@ class Application(object):
                 except TypeError:
                     pass
 
+    # 特别注意: 关键方法, 被调用时机
+    # - wsgi.py
+    #   - WSGIApplication()
+    #       - self.__call__() 方法
+    #
     def __call__(self, request):
         """Called by HTTPServer to execute the request."""
         transforms = [t(request) for t in self.transforms]
@@ -1082,6 +1184,7 @@ class Application(object):
         args = []
         kwargs = {}
         handlers = self._get_host_handlers(request)
+
         if not handlers:
             handler = RedirectHandler(
                 request, "http://" + self.default_host + "/")
@@ -1116,6 +1219,7 @@ class Application(object):
                   RequestHandler._templates.values())
             RequestHandler._static_hashes = {}
 
+        # 关键代码调用时机:
         handler._execute(transforms, *args, **kwargs)
         return handler
 
@@ -1485,6 +1589,10 @@ class URLSpec(object):
 url = URLSpec
 
 def _utf8(s):
+    # unicode 检查:
+    #     - 若s 是 unicode, 用 UTF-8编码,再返回
+    #     - 若s 是 普通 ASCII 字符串, 正常返回,
+    #     - 非 字符串, 抛出错误
     if isinstance(s, unicode):
         return s.encode("utf-8")
     assert isinstance(s, str)
