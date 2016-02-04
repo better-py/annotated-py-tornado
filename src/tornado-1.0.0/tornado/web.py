@@ -987,7 +987,6 @@ class RequestHandler(object):
 
 
 # 装饰器定义: 异步处理
-#
 def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.
 
@@ -1016,6 +1015,7 @@ def asynchronous(method):
     return wrapper
 
 
+# 装饰器定义: 去 斜杠(/)
 def removeslash(method):
     """Use this decorator to remove trailing slashes from the request path.
 
@@ -1025,17 +1025,19 @@ def removeslash(method):
     """
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
-        if self.request.path.endswith("/"):
+        if self.request.path.endswith("/"):            # 结尾含 /
             if self.request.method == "GET":
-                uri = self.request.path.rstrip("/")
-                if self.request.query: uri += "?" + self.request.query
-                self.redirect(uri)
+                uri = self.request.path.rstrip("/")    # 过滤掉 /
+                if self.request.query:
+                    uri += "?" + self.request.query
+                self.redirect(uri)    # 重定向
                 return
             raise HTTPError(404)
         return method(self, *args, **kwargs)
     return wrapper
 
 
+# 装饰器定义: 添加 斜杠(/)
 def addslash(method):
     """Use this decorator to add a missing trailing slash to the request path.
 
@@ -1048,8 +1050,9 @@ def addslash(method):
         if not self.request.path.endswith("/"):
             if self.request.method == "GET":
                 uri = self.request.path + "/"
-                if self.request.query: uri += "?" + self.request.query
-                self.redirect(uri)
+                if self.request.query:
+                    uri += "?" + self.request.query
+                self.redirect(uri)    # 重定向
                 return
             raise HTTPError(404)
         return method(self, *args, **kwargs)
@@ -1083,6 +1086,7 @@ class Application(object):
     Each tuple can contain an optional third element, which should be a
     dictionary if it is present. That dictionary is passed as keyword
     arguments to the contructor of the handler. This pattern is used
+
     for the StaticFileHandler below:
 
         application = web.Application([
@@ -1117,7 +1121,7 @@ class Application(object):
         """
         if transforms is None:
             self.transforms = []
-            if settings.get("gzip"):
+            if settings.get("gzip"):    # 配置选项
                 self.transforms.append(GZipContentEncoding)
             self.transforms.append(ChunkedTransferEncoding)
         else:
@@ -1144,8 +1148,9 @@ class Application(object):
                 (r"/(favicon\.ico)", StaticFileHandler, dict(path=path)),
                 (r"/(robots\.txt)", StaticFileHandler, dict(path=path)),
             ] + handlers
+
         if handlers:
-            self.add_handlers(".*$", handlers)
+            self.add_handlers(".*$", handlers)      # 关键调用
 
         # Automatically reload modified modules
         if self.settings.get("debug") and not wsgi:    # 调试模式时, 自动监测,并重启项目
@@ -1163,21 +1168,24 @@ class Application(object):
         # If a wildcard handler group exists, it should always be last
         # in the list, so insert new groups just before it.
         if self.handlers and self.handlers[-1][0].pattern == '.*$':
-            self.handlers.insert(-1, (re.compile(host_pattern), handlers))
+            self.handlers.insert(-1, (re.compile(host_pattern), handlers))    # 正则匹配
         else:
-            self.handlers.append((re.compile(host_pattern), handlers))
+            self.handlers.append((re.compile(host_pattern), handlers))        # 正则匹配
 
         for spec in host_handlers:
-            if type(spec) is type(()):
+            if type(spec) is type(()):    # 元组
                 assert len(spec) in (2, 3)
                 pattern = spec[0]
                 handler = spec[1]
+
                 if len(spec) == 3:
                     kwargs = spec[2]
                 else:
                     kwargs = {}
-                spec = URLSpec(pattern, handler, kwargs)
+                spec = URLSpec(pattern, handler, kwargs)    # 关键调用
+
             handlers.append(spec)
+
             if spec.name:
                 if spec.name in self.named_handlers:
                     logging.warning(
@@ -1194,6 +1202,7 @@ class Application(object):
         for pattern, handlers in self.handlers:
             if pattern.match(host):
                 return handlers
+
         # Look for default host if not behind load balancer (for debugging)
         if "X-Real-Ip" not in request.headers:
             for pattern, handlers in self.handlers:
@@ -1206,7 +1215,8 @@ class Application(object):
             self._load_ui_methods(dict((n, getattr(methods, n))
                                        for n in dir(methods)))
         elif isinstance(methods, list):
-            for m in methods: self._load_ui_methods(m)
+            for m in methods:
+                self._load_ui_methods(m)
         else:
             for name, fn in methods.iteritems():
                 if not name.startswith("_") and hasattr(fn, "__call__") \
@@ -1218,7 +1228,8 @@ class Application(object):
             self._load_ui_modules(dict((n, getattr(modules, n))
                                        for n in dir(modules)))
         elif isinstance(modules, list):
-            for m in modules: self._load_ui_modules(m)
+            for m in modules:
+                self._load_ui_modules(m)
         else:
             assert isinstance(modules, dict)
             for name, cls in modules.iteritems():
@@ -1228,7 +1239,9 @@ class Application(object):
                 except TypeError:
                     pass
 
-    # 特别注意: 关键方法, 被调用时机
+    # 关键定义: 类对象 --> 可调用对象
+    #
+    # 注意: 被调用时机
     # - wsgi.py
     #   - WSGIApplication()
     #       - self.__call__() 方法
@@ -1289,6 +1302,9 @@ class Application(object):
         raise KeyError("%s not found in named urls" % name)
 
 
+# ----------------------------------------------------
+#                    异常基类
+# ----------------------------------------------------
 class HTTPError(Exception):
     """An exception that will turn into an HTTP error response."""
     def __init__(self, status_code, log_message=None, *args):
@@ -1299,12 +1315,16 @@ class HTTPError(Exception):
     def __str__(self):
         message = "HTTP %d: %s" % (
             self.status_code, httplib.responses[self.status_code])
+
         if self.log_message:
             return message + " (" + (self.log_message % self.args) + ")"
         else:
             return message
 
 
+# ----------------------------------------------------
+#                    扩展子类: 出错处理
+# ----------------------------------------------------
 class ErrorHandler(RequestHandler):
     """Generates an error response with status_code for all requests."""
     def __init__(self, application, request, status_code):
@@ -1315,6 +1335,9 @@ class ErrorHandler(RequestHandler):
         raise HTTPError(self._status_code)
 
 
+# ----------------------------------------------------
+#                    扩展子类: 重定向处理
+# ----------------------------------------------------
 class RedirectHandler(RequestHandler):
     """Redirects the client to the given URL for all GET requests.
 
@@ -1329,10 +1352,16 @@ class RedirectHandler(RequestHandler):
         self._url = url
         self._permanent = permanent
 
+    # GET 请求,变成 重定向调用
     def get(self):
         self.redirect(self._url, permanent=self._permanent)
 
 
+# ----------------------------------------------------
+#                    扩展子类: 静态资源处理
+# 说明:
+#   - 覆写 get(), head() 方法
+# ----------------------------------------------------
 class StaticFileHandler(RequestHandler):
     """A simple handler that can serve static content from a directory.
 
@@ -1396,9 +1425,10 @@ class StaticFileHandler(RequestHandler):
         if not include_body:
             return
         self.set_header("Content-Length", stat_result[stat.ST_SIZE])
-        file = open(abspath, "rb")
+
+        file = open(abspath, "rb")     # 读文件
         try:
-            self.write(file.read())
+            self.write(file.read())    # 写出
         finally:
             file.close()
 
@@ -1407,15 +1437,22 @@ class StaticFileHandler(RequestHandler):
       pass
 
 
+# ----------------------------------------------------
+#                    扩展子类: 包裹 另外一个 回调
+# 说明:
+#   - 覆写 prepare() 预定义接口
+# ----------------------------------------------------
 class FallbackHandler(RequestHandler):
     """A RequestHandler that wraps another HTTP server callback.
 
     The fallback is a callable object that accepts an HTTPRequest,
     such as an Application or tornado.wsgi.WSGIContainer.  This is most
     useful to use both tornado RequestHandlers and WSGI in the same server.
+
     Typical usage:
         wsgi_app = tornado.wsgi.WSGIContainer(
             django.core.handlers.wsgi.WSGIHandler())
+
         application = tornado.web.Application([
             (r"/foo", FooHandler),
             (r".*", FallbackHandler, dict(fallback=wsgi_app),
@@ -1425,11 +1462,19 @@ class FallbackHandler(RequestHandler):
         RequestHandler.__init__(self, app, request)
         self.fallback = fallback
 
+    # 覆写接口
     def prepare(self):
         self.fallback(self.request)
         self._finished = True
 
 
+# ----------------------------------------------------
+#                    自定义基类: 输出转换
+# 说明:
+#   - 2个子类
+#       - GZipContentEncoding()
+#       - ChunkedTransferEncoding()
+# ----------------------------------------------------
 class OutputTransform(object):
     """A transform modifies the result of an HTTP request (e.g., GZip encoding)
 
@@ -1465,16 +1510,19 @@ class GZipContentEncoding(OutputTransform):
     def transform_first_chunk(self, headers, chunk, finishing):
         if self._gzipping:
             ctype = headers.get("Content-Type", "").split(";")[0]
+
             self._gzipping = (ctype in self.CONTENT_TYPES) and \
                 (not finishing or len(chunk) >= self.MIN_LENGTH) and \
                 (finishing or "Content-Length" not in headers) and \
                 ("Content-Encoding" not in headers)
+
         if self._gzipping:
             headers["Content-Encoding"] = "gzip"
             self._gzip_value = cStringIO.StringIO()
             self._gzip_file = gzip.GzipFile(mode="w", fileobj=self._gzip_value)
             self._gzip_pos = 0
-            chunk = self.transform_chunk(chunk, finishing)
+
+            chunk = self.transform_chunk(chunk, finishing)    # 关键调用
             if "Content-Length" in headers:
                 headers["Content-Length"] = str(len(chunk))
         return headers, chunk
@@ -1486,6 +1534,7 @@ class GZipContentEncoding(OutputTransform):
                 self._gzip_file.close()
             else:
                 self._gzip_file.flush()
+
             chunk = self._gzip_value.getvalue()
             if self._gzip_pos > 0:
                 chunk = chunk[self._gzip_pos:]
@@ -1522,22 +1571,47 @@ class ChunkedTransferEncoding(OutputTransform):
         return block
 
 
+# ----------------------------------------------------
+#                    装饰器定义: 权限认证
+# 代码功能逻辑:
+#   - 若当前用户已登录, 正常调用
+#   - 若当前用户未登录
+#       - 若是 GET 请求,
+#           - 先获取 login(网站登录页面) URL
+#           - URL中, 记录 next 字段参数, 记录 未登录前 访问的页面
+#           - 重定向到 login 页面
+#           - 正确登录后, 会根据 next 参数, 自动跳转到 登录前的页面
+#       - 其他请求, 直接抛出 403 错误页面
+# 批注:
+#   - 权限验证的典型实现, 值得学习
+#   - 代码很精简, 并不复杂
+# ----------------------------------------------------
 def authenticated(method):
     """Decorate methods with this to require that the user be logged in."""
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
-        if not self.current_user:
-            if self.request.method == "GET":
-                url = self.get_login_url()
+        if not self.current_user:     # 用户未登录
+            if self.request.method == "GET":    # GET 请求 处理
+                url = self.get_login_url()    # 获取登录页面的 URL
+
                 if "?" not in url:
+                    # 关键处理:
+                    #   - 在 URL 中,添加 <next>字段 [格式: ?next=/xxxx.html]
+                    #   - 目的: 当用户成功登录后,返回到登录前,访问的页面
                     url += "?" + urllib.urlencode(dict(next=self.request.uri))
-                self.redirect(url)
+
+                self.redirect(url)    # 重定向
                 return
-            raise HTTPError(403)
-        return method(self, *args, **kwargs)
+            raise HTTPError(403)      # 其他请求, 抛出 403 错误
+        return method(self, *args, **kwargs)    # 用户已登录时, 正常调用
     return wrapper
 
 
+# ----------------------------------------------------
+#                预定义接口类: UI模块 (处理 CSS,JS)
+# 说明:
+#   - 预定义了一些接口方法,需要 子类化, 并覆写后,才可使用
+# ----------------------------------------------------
 class UIModule(object):
     """A UI re-usable, modular unit on a page.
 
@@ -1552,6 +1626,7 @@ class UIModule(object):
         self.current_user = handler.current_user
         self.locale = handler.locale
 
+    # 预定义接口: 必须要 覆写,才能用
     def render(self, *args, **kwargs):
         raise NotImplementedError()
 
@@ -1582,6 +1657,12 @@ class UIModule(object):
     def render_string(self, path, **kwargs):
         return self.handler.render_string(path, **kwargs)
 
+
+# ----------------------------------------------------
+#                预定义接口类: URL 匹配
+# 说明:
+#   - URL 与 handler 映射
+# ----------------------------------------------------
 class URLSpec(object):
     """Specifies mappings between URLs and handlers."""
     def __init__(self, pattern, handler_class, kwargs={}, name=None):
@@ -1599,7 +1680,8 @@ class URLSpec(object):
         """
         if not pattern.endswith('$'):
             pattern += '$'
-        self.regex = re.compile(pattern)
+
+        self.regex = re.compile(pattern)    # 正则匹配
         self.handler_class = handler_class
         self.kwargs = kwargs
         self.name = name
@@ -1612,6 +1694,7 @@ class URLSpec(object):
         would return ('/%s/%s/', 2).
         """
         pattern = self.regex.pattern
+
         if pattern.startswith('^'):
             pattern = pattern[1:]
         if pattern.endswith('$'):
@@ -1636,25 +1719,38 @@ class URLSpec(object):
     def reverse(self, *args):
         assert self._path is not None, \
             "Cannot reverse url regex " + self.regex.pattern
+
         assert len(args) == self._group_count, "required number of arguments "\
             "not found"
+
         if not len(args):
             return self._path
         return self._path % tuple([str(a) for a in args])
 
+
 url = URLSpec
 
+
+# ----------------------------------------------------
+#                UTF8 编码处理: 编码检查
+# 代码逻辑:
+#   - 若 s 是 unicode 字符串
+#       - 使用 UTF8编码,并返回
+#   - 若 s 不是 字符串类型, 直接报错
+#   - 若 s 是 ASCII 字符串, 直接返回
+# ----------------------------------------------------
 def _utf8(s):
-    # unicode 检查:
-    #     - 若s 是 unicode, 用 UTF-8编码,再返回
-    #     - 若s 是 普通 ASCII 字符串, 正常返回,
-    #     - 非 字符串, 抛出错误
     if isinstance(s, unicode):
         return s.encode("utf-8")
     assert isinstance(s, str)
     return s
 
 
+# ----------------------------------------------------
+#                unicode 编码处理: 编码检查
+# 代码逻辑:
+#   - 基本类似  _utf8() 函数
+# ----------------------------------------------------
 def _unicode(s):
     if isinstance(s, str):
         try:
@@ -1668,6 +1764,7 @@ def _unicode(s):
 def _time_independent_equals(a, b):
     if len(a) != len(b):
         return False
+
     result = 0
     for x, y in zip(a, b):
         result |= ord(x) ^ ord(y)
