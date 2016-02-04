@@ -465,6 +465,11 @@ class RequestHandler(object):
             if body_part:
                 html_bodies.append(_utf8(body_part))
 
+        # ----------------------------------------------------------
+        # 如下是 分块处理部分:
+        #   - 本质工作: 在 拼接一个 长 HTML 字符串(包含 HTML,CSS,JS)
+        # ----------------------------------------------------------
+
         if js_files:
             # Maintain order of JavaScript files given by modules
             paths = []
@@ -482,10 +487,6 @@ class RequestHandler(object):
 
             sloc = html.rindex('</body>')
             html = html[:sloc] + js + '\n' + html[sloc:]
-
-        # ----------------------------------------------------------
-        # 如下是 分块处理部分:
-        # ----------------------------------------------------------
 
         if js_embed:
             js = '<script type="text/javascript">\n//<![CDATA[\n' + \
@@ -537,12 +538,15 @@ class RequestHandler(object):
             while frame.f_code.co_filename == web_file:
                 frame = frame.f_back
             template_path = os.path.dirname(frame.f_code.co_filename)
+
         if not getattr(RequestHandler, "_templates", None):
             RequestHandler._templates = {}
+
         if template_path not in RequestHandler._templates:
             loader = self.application.settings.get("template_loader") or\
               template.Loader(template_path)
-            RequestHandler._templates[template_path] = loader
+            RequestHandler._templates[template_path] = loader    # 注意
+
         t = RequestHandler._templates[template_path].load(template_name)
         args = dict(
             handler=self,
@@ -565,6 +569,7 @@ class RequestHandler(object):
 
         chunk = "".join(self._write_buffer)
         self._write_buffer = []
+
         if not self._headers_written:
             self._headers_written = True
             for transform in self._transforms:
@@ -578,7 +583,8 @@ class RequestHandler(object):
 
         # Ignore the chunk and only write the headers for HEAD requests
         if self.request.method == "HEAD":
-            if headers: self.request.write(headers)
+            if headers:
+                self.request.write(headers)    # 特别注意 self.request.write() 方法
             return
 
         if headers or chunk:
@@ -624,10 +630,11 @@ class RequestHandler(object):
 
         if not self.application._wsgi:
             self.flush(include_footers=True)
-            self.request.finish()
+            self.request.finish()    # 注意调用
             self._log()
         self._finished = True
 
+    # 给浏览器,返回 内部错误
     def send_error(self, status_code=500, **kwargs):
         """Sends the given HTTP error code to the browser.
 
@@ -640,10 +647,12 @@ class RequestHandler(object):
             if not self._finished:
                 self.finish()
             return
+
         self.clear()
         self.set_status(status_code)
         message = self.get_error_html(status_code, **kwargs)
-        self.finish(message)
+
+        self.finish(message)    # 写出信息
 
     def get_error_html(self, status_code, **kwargs):
         """Override to implement custom error pages.
@@ -657,6 +666,8 @@ class RequestHandler(object):
             "message": httplib.responses[status_code],
         }
 
+    # 本地配置: 通常用于设置 国际化-语言 (浏览器语言)
+    #
     @property
     def locale(self):
         """The local for the current session.
@@ -667,12 +678,14 @@ class RequestHandler(object):
         header.
         """
         if not hasattr(self, "_locale"):
-            self._locale = self.get_user_locale()
+            self._locale = self.get_user_locale()           # 配置为 用户设置
             if not self._locale:
-                self._locale = self.get_browser_locale()
+                self._locale = self.get_browser_locale()    # 配置为 浏览器默认设置
                 assert self._locale
         return self._locale
 
+    # 预定义接口 - 用户配置
+    #   - 使用前, 需覆写该函数
     def get_user_locale(self):
         """Override to determine the locale from the authenticated user.
 
@@ -680,6 +693,7 @@ class RequestHandler(object):
         """
         return None
 
+    # 默认浏览器设置语言环境
     def get_browser_locale(self, default="en_US"):
         """Determines the user's locale from Accept-Language header.
 
@@ -688,6 +702,7 @@ class RequestHandler(object):
         if "Accept-Language" in self.request.headers:
             languages = self.request.headers["Accept-Language"].split(",")
             locales = []
+
             for language in languages:
                 parts = language.strip().split(";")
                 if len(parts) > 1 and parts[1].startswith("q="):
@@ -698,12 +713,14 @@ class RequestHandler(object):
                 else:
                     score = 1.0
                 locales.append((parts[0], score))
+
             if locales:
                 locales.sort(key=lambda (l, s): s, reverse=True)
                 codes = [l[0] for l in locales]
                 return locale.get(*codes)
         return locale.get(default)
 
+    # 获取当前用户
     @property
     def current_user(self):
         """The authenticated user for this request.
@@ -719,9 +736,19 @@ class RequestHandler(object):
             self._current_user = self.get_current_user()
         return self._current_user
 
+    # 预定义接口 - 获取当前用户
+    #   - 使用前, 需覆写
+    #   - 特别说明: 通常都需要用到该接口, 基本上一定是需要 覆写的
     def get_current_user(self):
         """Override to determine the current user from, e.g., a cookie."""
         return None
+
+    # ----------------------------------------------------
+    # 如下2个函数, 用于获取 默认配置参数
+    #   - 登录 URL
+    #   - 模板路径
+    #   - 支持
+    # ----------------------------------------------------
 
     def get_login_url(self):
         """Override to customize the login URL based on the request.
@@ -739,6 +766,14 @@ class RequestHandler(object):
         """
         return self.application.settings.get("template_path")
 
+    # 预防 跨站攻击
+    #
+    #   - 默认先判断是否记录了 token
+    #        - 若已记录, 直接返回
+    #        - 若未记录, 尝试从 cookie 中 获取
+    #            - 若 cookie 中 存在, 从 cookie 中获取,并返回
+    #            - 若 cookie 中 不存在, 主动生成 token, 并同步写入 cookie. (目的是,无需重复生成)
+    #
     @property
     def xsrf_token(self):
         """The XSRF-prevention token for the current user/session.
@@ -751,12 +786,12 @@ class RequestHandler(object):
         See http://en.wikipedia.org/wiki/Cross-site_request_forgery
         """
         if not hasattr(self, "_xsrf_token"):
-            token = self.get_cookie("_xsrf")
+            token = self.get_cookie("_xsrf")    # cookie 中获取
             if not token:
-                token = binascii.b2a_hex(uuid.uuid4().bytes)
-                expires_days = 30 if self.current_user else None
-                self.set_cookie("_xsrf", token, expires_days=expires_days)
-            self._xsrf_token = token
+                token = binascii.b2a_hex(uuid.uuid4().bytes)    # token 生成方法
+                expires_days = 30 if self.current_user else None    # token 有效期
+                self.set_cookie("_xsrf", token, expires_days=expires_days)    # 更新 cookie
+            self._xsrf_token = token    # 更新 token
         return self._xsrf_token
 
     def check_xsrf_cookie(self):
@@ -771,25 +806,29 @@ class RequestHandler(object):
         """
         if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return
+
         token = self.get_argument("_xsrf", None)
         if not token:
             raise HTTPError(403, "'_xsrf' argument missing from POST")
         if self.xsrf_token != token:
             raise HTTPError(403, "XSRF cookie does not match POST argument")
 
+    # 提交表单 - 预防 xsrf 攻击方法
     def xsrf_form_html(self):
         """An HTML <input/> element to be included with all POST forms.
 
         It defines the _xsrf input value, which we check on all POST
-        requests to prevent cross-site request forgery. If you have set
-        the 'xsrf_cookies' application setting, you must include this
+        requests to prevent cross-site request forgery.
+        If you have set the 'xsrf_cookies' application setting, you must include this
         HTML within all of your HTML forms.
 
         See check_xsrf_cookie() above for more information.
         """
+        # 特别注意: 该 <表单提交> HTML字符串, 要含有 (name="_xsrf") 字段
         return '<input type="hidden" name="_xsrf" value="' + \
             escape.xhtml_escape(self.xsrf_token) + '"/>'
 
+    # 静态资源路径
     def static_url(self, path):
         """Returns a static URL for the given relative static file path.
 
@@ -808,8 +847,10 @@ class RequestHandler(object):
         path names.
         """
         self.require_setting("static_path", "static_url")
+
         if not hasattr(RequestHandler, "_static_hashes"):
             RequestHandler._static_hashes = {}
+
         hashes = RequestHandler._static_hashes
         if path not in hashes:
             try:
@@ -820,14 +861,17 @@ class RequestHandler(object):
             except:
                 logging.error("Could not open static file %r", path)
                 hashes[path] = None
+
         base = self.request.protocol + "://" + self.request.host \
             if getattr(self, "include_host", False) else ""
         static_url_prefix = self.settings.get('static_url_prefix', '/static/')
+
         if hashes.get(path):
             return base + static_url_prefix + path + "?v=" + hashes[path][:5]
         else:
             return base + static_url_prefix + path
 
+    # 异步回调
     def async_callback(self, callback, *args, **kwargs):
         """Wrap callbacks with this if they are used on asynchronous requests.
 
@@ -835,8 +879,10 @@ class RequestHandler(object):
         """
         if callback is None:
             return None
+
         if args or kwargs:
             callback = functools.partial(callback, *args, **kwargs)
+
         def wrapper(*args, **kwargs):
             try:
                 return callback(*args, **kwargs)
@@ -857,9 +903,12 @@ class RequestHandler(object):
     def reverse_url(self, name, *args):
         return self.application.reverse_url(name, *args)
 
+    # 关键代码:
+    #
     def _execute(self, transforms, *args, **kwargs):
         """Executes this request with the given output transforms."""
         self._transforms = transforms
+
         try:
             if self.request.method not in self.SUPPORTED_METHODS:
                 raise HTTPError(405)
@@ -867,14 +916,14 @@ class RequestHandler(object):
             # the proper cookie
             if self.request.method == "POST" and \
                self.application.settings.get("xsrf_cookies"):
-                self.check_xsrf_cookie()
+                self.check_xsrf_cookie()         # 检查
 
             self.prepare()   # 注意调用时机
 
             if not self._finished:
                 getattr(self, self.request.method.lower())(*args, **kwargs)
                 if self._auto_finish and not self._finished:
-                    self.finish()
+                    self.finish()    # 关键调用
         except Exception, e:
             self._handle_request_exception(e)
 
@@ -882,11 +931,13 @@ class RequestHandler(object):
         lines = [self.request.version + " " + str(self._status_code) + " " +
                  httplib.responses[self._status_code]]
         lines.extend(["%s: %s" % (n, v) for n, v in self._headers.iteritems()])
+
         for cookie_dict in getattr(self, "_new_cookies", []):
             for cookie in cookie_dict.values():
                 lines.append("Set-Cookie: " + cookie.OutputString(None))
         return "\r\n".join(lines) + "\r\n\r\n"
 
+    # 打印出错日志
     def _log(self):
         if self._status_code < 400:
             log_method = logging.info
@@ -894,7 +945,9 @@ class RequestHandler(object):
             log_method = logging.warning
         else:
             log_method = logging.error
+
         request_time = 1000.0 * self.request.request_time()
+        # 日志打印
         log_method("%d %s %.2fms", self._status_code,
                    self._request_summary(), request_time)
 
@@ -924,6 +977,7 @@ class RequestHandler(object):
                 self._active_modules = {}
             if name not in self._active_modules:
                 self._active_modules[name] = module(self)
+
             rendered = self._active_modules[name].render(*args, **kwargs)
             return rendered
         return render
@@ -932,6 +986,8 @@ class RequestHandler(object):
         return lambda *args, **kwargs: method(self, *args, **kwargs)
 
 
+# 装饰器定义: 异步处理
+#
 def asynchronous(method):
     """Wrap request handler methods with this if they are asynchronous.
 
