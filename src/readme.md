@@ -11,7 +11,19 @@
 
 ## 注解进度:
 
-- 待更新
+- 2016-02-11:
+    - tornado 1.0.0 版本的 主要模块代码,基本完成注解.
+    - 重要模块:
+        - ioloop.py       # 已注解
+        - web.py          # 已注解
+        - iostream.py     # 部分注解
+        - httpserver.py   # 已注解
+        - template.py     # 部分注解
+        - wsgi.py         # 部分注解
+    - 其他非重要模块:
+        - auth.py         # 支持第三方登录的模块
+        - database.py     # ORM简单实现
+        - httputil.py     # http头解析处理
 
 
 ### 4.2.0 版本:
