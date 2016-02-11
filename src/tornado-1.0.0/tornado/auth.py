@@ -1,24 +1,23 @@
 #!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
+# -*- coding: utf8 -*-
 
-"""Implementations of various third-party authentication schemes.
+
+"""
+Mixin - 方式, 实现支持第三方登录
+    - 注意学习典型的 Minxin 实现写法.
+    - 实现细节: 大量依赖 httpclient.py 模块 的  httpclient.AsyncHTTPClient()
+    - 包含 Google, twitter, Facebook 登录方式的 Mixin 插件接口定义
+    - 如果需要扩展 国内的 诸如: 微博,微信,QQ等产品的登录,可以参考编写.
+
+
+Implementations of various third-party authentication schemes.
 
 All the classes in this file are class Mixins designed to be used with
-web.py RequestHandler classes. The primary methods for each service are
-authenticate_redirect(), authorize_redirect(), and get_authenticated_user().
+web.py RequestHandler classes.
+
+The primary methods for each service are authenticate_redirect(),
+authorize_redirect(), and get_authenticated_user().
+
 The former should be called to redirect the user to, e.g., the OpenID
 authentication page on the third party service, and the latter should
 be called upon return to get the user data from the data returned by
@@ -28,6 +27,8 @@ They all take slightly different arguments due to the fact all these
 services implement authentication and authorization slightly differently.
 See the individual service classes below for complete documentation.
 
+
+示例代码:
 Example usage for Google OpenID:
 
 class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
@@ -57,13 +58,15 @@ import urllib
 import urlparse
 import uuid
 
+
 class OpenIdMixin(object):
     """Abstract implementation of OpenID and Attribute Exchange.
 
     See GoogleMixin below for example implementations.
     """
+
     def authenticate_redirect(self, callback_uri=None,
-                              ax_attrs=["name","email","language","username"]):
+                              ax_attrs=["name", "email", "language", "username"]):
         """Returns the authentication URL for this service.
 
         After authentication, the service will redirect back to the given
@@ -76,7 +79,7 @@ class OpenIdMixin(object):
         """
         callback_uri = callback_uri or self.request.path
         args = self._openid_args(callback_uri, ax_attrs=ax_attrs)
-        self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))
+        self.redirect(self._OPENID_ENDPOINT + "?" + urllib.urlencode(args))    # 调用
 
     def get_authenticated_user(self, callback):
         """Fetches the authenticated user data upon redirect.
@@ -89,9 +92,10 @@ class OpenIdMixin(object):
         args = dict((k, v[-1]) for k, v in self.request.arguments.iteritems())
         args["openid.mode"] = u"check_authentication"
         url = self._OPENID_ENDPOINT + "?" + urllib.urlencode(args)
-        http = httpclient.AsyncHTTPClient()
+
+        http = httpclient.AsyncHTTPClient()    # 异步
         http.fetch(url, self.async_callback(
-            self._on_authentication_verified, callback))
+            self._on_authentication_verified, callback))    # 回调
 
     def _openid_args(self, callback_uri, ax_attrs=[], oauth_scope=None):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)
@@ -105,13 +109,18 @@ class OpenIdMixin(object):
             "openid.realm": self.request.protocol + "://" + self.request.host + "/",
             "openid.mode": "checkid_setup",
         }
+
         if ax_attrs:
+            # 字典,更新数据对
             args.update({
                 "openid.ns.ax": "http://openid.net/srv/ax/1.0",
                 "openid.ax.mode": "fetch_request",
             })
+
             ax_attrs = set(ax_attrs)
+
             required = []
+
             if "name" in ax_attrs:
                 ax_attrs -= set(["name", "firstname", "fullname", "lastname"])
                 required += ["firstname", "fullname", "lastname"]
@@ -123,14 +132,17 @@ class OpenIdMixin(object):
                     "openid.ax.type.lastname":
                         "http://axschema.org/namePerson/last",
                 })
+
             known_attrs = {
                 "email": "http://axschema.org/contact/email",
                 "language": "http://axschema.org/pref/language",
                 "username": "http://axschema.org/namePerson/friendly",
             }
+
             for name in ax_attrs:
                 args["openid.ax.type." + name] = known_attrs[name]
                 required.append(name)
+
             args["openid.ax.required"] = ",".join(required)
         if oauth_scope:
             args.update({
@@ -155,6 +167,7 @@ class OpenIdMixin(object):
                values[-1] == u"http://openid.net/srv/ax/1.0":
                 ax_ns = name[10:]
                 break
+
         def get_ax_arg(uri):
             if not ax_ns: return u""
             prefix = "openid." + ax_ns + ".type."
@@ -164,7 +177,8 @@ class OpenIdMixin(object):
                     part = name[len(prefix):]
                     ax_name = "openid." + ax_ns + ".value." + part
                     break
-            if not ax_name: return u""
+            if not ax_name:
+                return u""
             return self.get_argument(ax_name, u"")
 
         email = get_ax_arg("http://axschema.org/contact/email")
@@ -173,8 +187,10 @@ class OpenIdMixin(object):
         last_name = get_ax_arg("http://axschema.org/namePerson/last")
         username = get_ax_arg("http://axschema.org/namePerson/friendly")
         locale = get_ax_arg("http://axschema.org/pref/language").lower()
+
         user = dict()
         name_parts = []
+
         if first_name:
             user["first_name"] = first_name
             name_parts.append(first_name)
@@ -187,9 +203,14 @@ class OpenIdMixin(object):
             user["name"] = u" ".join(name_parts)
         elif email:
             user["name"] = email.split("@")[0]
-        if email: user["email"] = email
-        if locale: user["locale"] = locale
-        if username: user["username"] = username
+
+        if email:
+            user["email"] = email
+        if locale:
+            user["locale"] = locale
+        if username:
+            user["username"] = username
+
         callback(user)
 
 
@@ -213,7 +234,8 @@ class OAuthMixin(object):
         """
         if callback_uri and getattr(self, "_OAUTH_NO_CALLBACKS", False):
             raise Exception("This service does not support oauth_callback")
-        http = httpclient.AsyncHTTPClient()
+
+        http = httpclient.AsyncHTTPClient()    # 异步
         http.fetch(self._oauth_request_token_url(), self.async_callback(
             self._on_request_token, self._OAUTH_AUTHORIZE_URL, callback_uri))
 
@@ -233,13 +255,16 @@ class OAuthMixin(object):
             logging.warning("Missing OAuth request token cookie")
             callback(None)
             return
+
         cookie_key, cookie_secret = request_cookie.split("|")
         if cookie_key != request_key:
             logging.warning("Request token does not match cookie")
             callback(None)
             return
+
         token = dict(key=cookie_key, secret=cookie_secret)
-        http = httpclient.AsyncHTTPClient()
+
+        http = httpclient.AsyncHTTPClient()     # 异步
         http.fetch(self._oauth_access_token_url(token), self.async_callback(
             self._on_access_token, callback))
 
@@ -264,6 +289,7 @@ class OAuthMixin(object):
         data = "|".join([request_token["key"], request_token["secret"]])
         self.set_cookie("_oauth_request_token", data)
         args = dict(oauth_token=request_token["key"])
+
         if callback_uri:
             args["oauth_callback"] = urlparse.urljoin(
                 self.request.full_url(), callback_uri)
@@ -290,6 +316,7 @@ class OAuthMixin(object):
             logging.warning("Could not fetch access token")
             callback(None)
             return
+
         access_token = _oauth_parse_response(response.body)
         user = self._oauth_get_user(access_token, self.async_callback(
              self._on_oauth_get_user, access_token, callback))
@@ -428,9 +455,12 @@ class TwitterMixin(OAuthMixin):
             oauth = self._oauth_request_parameters(
                 url, access_token, all_args, method=method)
             args.update(oauth)
-        if args: url += "?" + urllib.urlencode(args)
+        if args:
+            url += "?" + urllib.urlencode(args)
+
         callback = self.async_callback(self._on_twitter_request, callback)
-        http = httpclient.AsyncHTTPClient()
+        http = httpclient.AsyncHTTPClient()    # 异步
+
         if post_args is not None:
             http.fetch(url, method="POST", body=urllib.urlencode(post_args),
                        callback=callback)
@@ -548,9 +578,13 @@ class FriendFeedMixin(OAuthMixin):
             oauth = self._oauth_request_parameters(
                 url, access_token, all_args, method=method)
             args.update(oauth)
-        if args: url += "?" + urllib.urlencode(args)
+
+        if args:
+            url += "?" + urllib.urlencode(args)
+
         callback = self.async_callback(self._on_friendfeed_request, callback)
-        http = httpclient.AsyncHTTPClient()
+        http = httpclient.AsyncHTTPClient()    # 异步
+
         if post_args is not None:
             http.fetch(url, method="POST", body=urllib.urlencode(post_args),
                        callback=callback)
@@ -641,7 +675,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
                 break
         token = self.get_argument("openid." + oauth_ns + ".request_token", "")
         if token:
-            http = httpclient.AsyncHTTPClient()
+            http = httpclient.AsyncHTTPClient()    # 异步
             token = dict(key=token, secret="")
             http.fetch(self._oauth_access_token_url(token),
                        self.async_callback(self._on_access_token, callback))
@@ -786,6 +820,7 @@ class FacebookMixin(object):
         self.require_setting("facebook_secret", "Facebook Connect")
         if not method.startswith("facebook."):
             method = "facebook." + method
+
         args["api_key"] = self.settings["facebook_api_key"]
         args["v"] = "1.0"
         args["method"] = method
@@ -794,7 +829,8 @@ class FacebookMixin(object):
         args["sig"] = self._signature(args)
         url = "http://api.facebook.com/restserver.php?" + \
             urllib.urlencode(args)
-        http = httpclient.AsyncHTTPClient()
+
+        http = httpclient.AsyncHTTPClient()    # 异步
         http.fetch(url, callback=self.async_callback(
             self._parse_response, callback))
 
@@ -802,6 +838,7 @@ class FacebookMixin(object):
         if users is None:
             callback(None)
             return
+
         callback({
             "name": users[0]["name"],
             "first_name": users[0]["first_name"],
@@ -820,12 +857,14 @@ class FacebookMixin(object):
             logging.warning("HTTP error from Facebook: %s", response.error)
             callback(None)
             return
+
         try:
             json = escape.json_decode(response.body)
         except:
             logging.warning("Invalid JSON from Facebook: %r", response.body)
             callback(None)
             return
+
         if isinstance(json, dict) and json.get("error_code"):
             logging.warning("Facebook error: %d: %r", json["error_code"],
                             json.get("error_msg"))
@@ -854,7 +893,7 @@ def _oauth_signature(consumer_token, method, url, parameters={}, token=None):
     base_elems.append(normalized_url)
     base_elems.append("&".join("%s=%s" % (k, _oauth_escape(str(v)))
                                for k, v in sorted(parameters.items())))
-    base_string =  "&".join(_oauth_escape(e) for e in base_elems)
+    base_string = "&".join(_oauth_escape(e) for e in base_elems)
 
     key_elems = [consumer_token["secret"]]
     key_elems.append(token["secret"] if token else "")
