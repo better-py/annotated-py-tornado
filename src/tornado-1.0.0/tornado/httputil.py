@@ -1,18 +1,12 @@
 #!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
+# -*- coding: utf8 -*-
+
+"""
+    模块功能: HTTP 头处理
+        - 代码很少, 简单的 解析,格式化 HTTP 头 字段
+"""
+
+
 
 """HTTP utility code shared by clients and servers."""
 
@@ -54,11 +48,12 @@ class HTTPHeaders(dict):
 
     def add(self, name, value):
         """Adds a new value for the given key."""
-        norm_name = HTTPHeaders._normalize_name(name)
+        norm_name = HTTPHeaders._normalize_name(name)    # cookie 字段, 格式化
+
         if norm_name in self:
             # bypass our override of __setitem__ since it modifies _as_list
             dict.__setitem__(self, norm_name, self[norm_name] + ',' + value)
-            self._as_list[norm_name].append(value)
+            self._as_list[norm_name].append(value)    # 字典 嵌入 列表
         else:
             self[norm_name] = value
 
@@ -75,7 +70,7 @@ class HTTPHeaders(dict):
         """
         for name, list in self._as_list.iteritems():
             for value in list:
-                yield (name, value)
+                yield (name, value)    # 生成器
 
     def parse_line(self, line):
         """Updates the dictionary with a single header line.
@@ -85,8 +80,8 @@ class HTTPHeaders(dict):
         >>> h.get('content-type')
         'text/html'
         """
-        name, value = line.split(":", 1)
-        self.add(name, value.strip())
+        name, value = line.split(":", 1)    # 字符串 切分
+        self.add(name, value.strip())       # 关键调用
 
     @classmethod
     def parse(cls, headers):
@@ -104,10 +99,10 @@ class HTTPHeaders(dict):
 
     # dict implementation overrides
 
-    def __setitem__(self, name, value):
+    def __setitem__(self, name, value):    # 关键覆写
         norm_name = HTTPHeaders._normalize_name(name)
         dict.__setitem__(self, norm_name, value)
-        self._as_list[norm_name] = [value]
+        self._as_list[norm_name] = [value]    # 注意
 
     def __getitem__(self, name):
         return dict.__getitem__(self, HTTPHeaders._normalize_name(name))
@@ -132,6 +127,7 @@ class HTTPHeaders(dict):
         >>> HTTPHeaders._normalize_name("coNtent-TYPE")
         'Content-Type'
         """
+        # cookie 标签字段, 格式化, 首字母大写
         return "-".join([w.capitalize() for w in name.split("-")])
 
 
