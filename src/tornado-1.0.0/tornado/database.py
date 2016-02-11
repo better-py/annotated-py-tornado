@@ -1,20 +1,14 @@
 #!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
+# -*- coding: utf8 -*-
 
-"""A lightweight wrapper around MySQLdb."""
+
+"""
+简单的 ORM 实现:
+    - 对MySQLdb的API接口,作简单封装.
+    - 实现非常简单.
+    - 封装的 query,等操作,代码都很简单
+
+A lightweight wrapper around MySQLdb."""
 
 import copy
 import MySQLdb.constants
@@ -23,6 +17,8 @@ import MySQLdb.cursors
 import itertools
 import logging
 
+
+# mysql api 简单封装
 class Connection(object):
     """A lightweight wrapper around MySQLdb DB-API connections.
 
@@ -66,8 +62,9 @@ class Connection(object):
 
         self._db = None
         self._db_args = args
+
         try:
-            self.reconnect()
+            self.reconnect()     # 数据库 重新连接
         except:
             logging.error("Cannot connect to MySQL on %s", self.host,
                           exc_info=True)
@@ -81,34 +78,41 @@ class Connection(object):
             self._db.close()
             self._db = None
 
+    # 重新连接数据库
     def reconnect(self):
         """Closes the existing database connection and re-opens it."""
-        self.close()
-        self._db = MySQLdb.connect(**self._db_args)
+        self.close()                                  # 先关闭
+        self._db = MySQLdb.connect(**self._db_args)   # 再重新连接
         self._db.autocommit(True)
 
     def iter(self, query, *parameters):
         """Returns an iterator for the given query and parameters."""
-        if self._db is None: self.reconnect()
-        cursor = MySQLdb.cursors.SSCursor(self._db)
+        if self._db is None:
+            self.reconnect()
+
+        cursor = MySQLdb.cursors.SSCursor(self._db)     # 游标
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters)    # 执行SQL操作
             column_names = [d[0] for d in cursor.description]
             for row in cursor:
-                yield Row(zip(column_names, row))
+                yield Row(zip(column_names, row))    # 生成器实现
         finally:
-            cursor.close()
+            cursor.close()    # 关闭游标
 
+    # 查询操作接口
+    # 返回值: 列表
     def query(self, query, *parameters):
         """Returns a row list for the given query and parameters."""
-        cursor = self._cursor()
+        cursor = self._cursor()    # 获取游标
+
         try:
-            self._execute(cursor, query, parameters)
+            self._execute(cursor, query, parameters)    # 执行SQL操作
             column_names = [d[0] for d in cursor.description]
             return [Row(itertools.izip(column_names, row)) for row in cursor]
         finally:
             cursor.close()
 
+    # 单行查询
     def get(self, query, *parameters):
         """Returns the first row returned for the given query."""
         rows = self.query(query, *parameters)
@@ -117,8 +121,9 @@ class Connection(object):
         elif len(rows) > 1:
             raise Exception("Multiple rows returned for Database.get() query")
         else:
-            return rows[0]
+            return rows[0]   # 返回单行数据
 
+    # 执行SQL操作
     def execute(self, query, *parameters):
         """Executes the given query, returning the lastrowid from the query."""
         cursor = self._cursor()
@@ -128,6 +133,7 @@ class Connection(object):
         finally:
             cursor.close()
 
+    # 批量执行SQL操作
     def executemany(self, query, parameters):
         """Executes the given query against all the given param sequences.
 
@@ -140,10 +146,13 @@ class Connection(object):
         finally:
             cursor.close()
 
+    # 获取MySQL游标
     def _cursor(self):
-        if self._db is None: self.reconnect()
-        return self._db.cursor()
+        if self._db is None:
+            self.reconnect()
+        return self._db.cursor()    # 返回游标
 
+    # 执行SQL操作
     def _execute(self, cursor, query, parameters):
         try:
             return cursor.execute(query, parameters)
@@ -153,6 +162,7 @@ class Connection(object):
             raise
 
 
+# 自定义 数据库查询结果集 返回的数据格式
 class Row(dict):
     """A dict that allows for object-like property access syntax."""
     def __getattr__(self, name):
