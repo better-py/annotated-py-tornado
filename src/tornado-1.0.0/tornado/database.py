@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
+import copy
+import MySQLdb.constants
+import MySQLdb.converters
+import MySQLdb.cursors
+import itertools
+import logging
 
 
 """
@@ -8,14 +14,13 @@
     - 实现非常简单.
     - 封装的 query,等操作,代码都很简单
 
-A lightweight wrapper around MySQLdb."""
+点评:
+    - 实现没有难以理解的点.
+    - 基本注释完.
 
-import copy
-import MySQLdb.constants
-import MySQLdb.converters
-import MySQLdb.cursors
-import itertools
-import logging
+A lightweight wrapper around MySQLdb.
+
+"""
 
 
 # mysql api 简单封装
