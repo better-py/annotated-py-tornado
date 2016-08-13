@@ -82,3 +82,4 @@ secrets.cfg
 .DS_Store
 
 src/tornado-4.2.0/docs/
+tmp/
